@@ -1,10 +1,22 @@
+# Docker Composeのバージョンを指定
 version: '3'
+
 services:
+  # ROS2デスクトップ環境のサービス定義
   ros2-desktop:
+    # ROS2 Humble + VNCサーバーを含むDockerイメージを使用
     image: tiryoh/ros2-desktop-vnc:humble-arm64
+    
+    # ポート転送の設定
     ports:
-      - "6080:80"
-      - "10000:10000"
+      - "6080:80"     # noVNC (ブラウザベースVNC) 用ポート
+      - "10000:10000" # 通常のVNCクライアント用ポート
+    
+    # ボリュームマウントの設定
     volumes:
+      # ホストのws_colonディレクトリをコンテナ内のcolcon_wsにマウント
+      # cached: パフォーマンス向上のためのキャッシュオプション
       - ./ws_colcon:/home/ubuntu/colcon_ws:cached
+    
+    # 共有メモリサイズの設定(GUIアプリケーションのパフォーマンス向上用)
     shm_size: '1024m'

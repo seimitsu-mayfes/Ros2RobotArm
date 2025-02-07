@@ -1,6 +1,11 @@
 #!/bin/bash
 
-# Create User
+#=========================================
+# ユーザー設定セクション
+# このセクションでは、コンテナ内のユーザーアカウントを設定します
+#=========================================
+
+# ユーザーの作成と設定
 USER=${USER:-root}
 HOME=/root
 if [ "$USER" != "root" ]; then
@@ -18,7 +23,12 @@ if [ "$USER" != "root" ]; then
     [ -d "/dev/snd" ] && chgrp -R adm /dev/snd
 fi
 
-# VNC password
+#=========================================
+# VNCサーバー設定セクション
+# VNCサーバーのパスワードと基本設定を行います
+#=========================================
+
+# VNCパスワードの設定
 VNC_PASSWORD=${PASSWORD:-ubuntu}
 
 mkdir -p $HOME/.vnc
@@ -27,7 +37,12 @@ chmod 600 $HOME/.vnc/passwd
 chown -R $USER:$USER $HOME
 sed -i "s/password = WebUtil.getConfigVar('password');/password = '$VNC_PASSWORD'/" /usr/lib/novnc/app/ui.js
 
-# xstartup
+#=========================================
+# デスクトップ環境設定セクション
+# MATE デスクトップ環境の起動スクリプトを設定
+#=========================================
+
+# xstartupスクリプトの設定
 XSTARTUP_PATH=$HOME/.vnc/xstartup
 cat << EOF > $XSTARTUP_PATH
 #!/bin/sh
@@ -37,7 +52,12 @@ EOF
 chown $USER:$USER $XSTARTUP_PATH
 chmod 755 $XSTARTUP_PATH
 
-# vncserver launch
+#=========================================
+# VNCサーバー起動スクリプト
+# VNCサーバーの起動設定とディスプレイ解像度の設定
+#=========================================
+
+# VNCサーバー起動スクリプトの作成
 VNCRUN_PATH=$HOME/.vnc/vnc_run.sh
 cat << EOF > $VNCRUN_PATH
 #!/bin/sh
@@ -60,7 +80,13 @@ else
 fi
 EOF
 
-# Supervisor
+#=========================================
+# Supervisor設定セクション
+# プロセス管理ツールSupervisorの設定
+# VNCサーバーとnoVNCのプロセスを管理します
+#=========================================
+
+# Supervisor設定ファイルの作成
 CONF_PATH=/etc/supervisor/conf.d/supervisord.conf
 cat << EOF > $CONF_PATH
 [supervisord]
@@ -72,18 +98,33 @@ command=gosu '$USER' bash '$VNCRUN_PATH'
 command=gosu '$USER' bash -c "websockify --web=/usr/lib/novnc 80 localhost:5901"
 EOF
 
-# colcon
+#=========================================
+# ROS2環境設定セクション
+# ROS2とcolconの環境変数とコマンド補完を設定
+#=========================================
+
+# ROS2とcolconの設定
 BASHRC_PATH=$HOME/.bashrc
 grep -F "source /opt/ros/$ROS_DISTRO/setup.bash" $BASHRC_PATH || echo "source /opt/ros/$ROS_DISTRO/setup.bash" >> $BASHRC_PATH
 grep -F "source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash" $BASHRC_PATH || echo "source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash" >> $BASHRC_PATH
 chown $USER:$USER $BASHRC_PATH
 
-# Fix rosdep permission
+#=========================================
+# rosdep権限修正セクション
+# ROSパッケージ依存関係管理ツールの権限を修正
+#=========================================
+
+# rosdepの権限修正
 mkdir -p $HOME/.ros
 cp -r /root/.ros/rosdep $HOME/.ros/rosdep
 chown -R $USER:$USER $HOME/.ros
 
-# Add terminator shortcut
+#=========================================
+# デスクトップショートカット作成セクション
+# 各種アプリケーションのデスクトップショートカットを作成
+#=========================================
+
+# ターミナルエミュレータ(terminator)のショートカット作成
 mkdir -p $HOME/Desktop
 cat << EOF > $HOME/Desktop/terminator.desktop
 [Desktop Entry]
@@ -349,7 +390,12 @@ Icon=vscodium
 EOF
 chown -R $USER:$USER $HOME/Desktop
 
-# clearup
+#=========================================
+# クリーンアップセクション
+# セキュリティのため、パスワード変数をクリア
+#=========================================
+
+# 環境変数のクリーンアップ
 PASSWORD=
 VNC_PASSWORD=
 

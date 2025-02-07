@@ -15,21 +15,30 @@
 # This Dockerfile is based on https://github.com/AtsushiSaito/docker-ubuntu-sweb
 # which is released under the Apache-2.0 license.
 
+# ベースイメージとして Ubuntu 22.04 (Jammy) を使用
 FROM ubuntu:jammy-20240808
 
+# ビルド時のターゲットプラットフォーム引数
 ARG TARGETPLATFORM
 LABEL maintainer="Tiryoh<tiryoh@gmail.com>"
 
+# シェルをbashに設定
 SHELL ["/bin/bash", "-c"]
 
-# Upgrade OS
+#=========================================
+# OSアップグレード
+# システムパッケージを最新の状態に更新
+#=========================================
 RUN apt-get update -q && \
     DEBIAN_FRONTEND=noninteractive apt-get upgrade -y && \
     apt-get autoclean && \
     apt-get autoremove && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Ubuntu Mate desktop
+#=========================================
+# デスクトップ環境のインストール
+# Ubuntu MATE デスクトップ環境をセットアップ
+#=========================================
 RUN apt-get update -q && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
         ubuntu-mate-desktop && \
@@ -37,7 +46,10 @@ RUN apt-get update -q && \
     apt-get autoremove && \
     rm -rf /var/lib/apt/lists/*
 
-# Add Package
+#=========================================
+# 必要なパッケージのインストール
+# VNC、開発ツール、その他の必要なユーティリティをインストール
+#=========================================
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
         tigervnc-standalone-server tigervnc-common \
@@ -49,19 +61,31 @@ RUN apt-get update && \
     apt-get autoremove && \
     rm -rf /var/lib/apt/lists/*
 
-# noVNC and Websockify
+#=========================================
+# VNCブラウザアクセス設定
+# ブラウザベースのVNCクライアント(noVNC)とWebSocket実装をセットアップ
+#=========================================
 RUN git clone https://github.com/AtsushiSaito/noVNC.git -b add_clipboard_support /usr/lib/novnc
 RUN pip install git+https://github.com/novnc/websockify.git@v0.10.0
 RUN ln -s /usr/lib/novnc/vnc.html /usr/lib/novnc/index.html
 
-# Set remote resize function enabled by default
+#=========================================
+# VNC表示設定
+# リモートリサイズ機能をデフォルトで有効化
+#=========================================
 RUN sed -i "s/UI.initSetting('resize', 'off');/UI.initSetting('resize', 'remote');/g" /usr/lib/novnc/app/ui.js
 
-# Disable auto update and crash report
+#=========================================
+# システム設定の最適化
+# 自動更新とクラッシュレポートを無効化してコンテナの動作を安定化
+#=========================================
 RUN sed -i 's/Prompt=.*/Prompt=never/' /etc/update-manager/release-upgrades
 RUN sed -i 's/enabled=1/enabled=0/g' /etc/default/apport
 
-# Install Firefox
+#=========================================
+# Firefoxブラウザのインストール
+# Mozilla Firefoxの最新バージョンをインストール
+#=========================================
 RUN DEBIAN_FRONTEND=noninteractive add-apt-repository ppa:mozillateam/ppa -y && \
     echo 'Package: *' > /etc/apt/preferences.d/mozilla-firefox && \
     echo 'Pin: release o=LP-PPA-mozillateam' >> /etc/apt/preferences.d/mozilla-firefox && \
@@ -73,7 +97,10 @@ RUN DEBIAN_FRONTEND=noninteractive add-apt-repository ppa:mozillateam/ppa -y && 
     apt-get autoremove && \
     rm -rf /var/lib/apt/lists/*
 
-# Install VSCodium
+#=========================================
+# VSCodiumのインストール
+# オープンソースのコードエディタVSCodiumをインストール
+#=========================================
 RUN wget https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg \
     -O /usr/share/keyrings/vscodium-archive-keyring.asc && \
     echo 'deb [ signed-by=/usr/share/keyrings/vscodium-archive-keyring.asc ] https://paulcarroty.gitlab.io/vscodium-deb-rpm-repo/debs vscodium main' \
@@ -84,7 +111,10 @@ RUN wget https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg
     apt-get autoremove && \
     rm -rf /var/lib/apt/lists/*
 
-# Install ROS
+#=========================================
+# ROS2のインストール
+# ROS2 Humbleディストリビューションと関連ツールをセットアップ
+#=========================================
 ENV ROS_DISTRO humble
 # desktop or ros-base
 ARG INSTALL_PACKAGE=desktop
@@ -103,7 +133,10 @@ RUN apt-get update -q && \
 
 RUN rosdep update
 
-# Install simulation package only on amd64
+#=========================================
+# シミュレーションパッケージのインストール
+# amd64アーキテクチャの場合のみGazeboとその他のシミュレーションツールをインストール
+#=========================================
 # Not ready for arm64 for now (July 28th, 2020)
 # https://github.com/Tiryoh/docker-ros2-desktop-vnc/pull/56#issuecomment-1196359860
 RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
@@ -114,13 +147,19 @@ RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
     rm -rf /var/lib/apt/lists/*; \
     fi
 
-# Enable apt-get completion after running `apt-get update` in the container
+#=========================================
+# apt-get補完の有効化
+# コンテナ内でのapt-getコマンド補完を有効化
+#=========================================
 RUN rm /etc/apt/apt.conf.d/docker-clean
 
 COPY ./entrypoint.sh /
 RUN dos2unix /entrypoint.sh
 ENTRYPOINT [ "/bin/bash", "-c", "/entrypoint.sh" ]
 
+#=========================================
+# デフォルトユーザー設定
+# コンテナのデフォルトユーザー名とパスワードを設定
+#=========================================
 ENV USER ubuntu
 ENV PASSWD ubuntu
-
