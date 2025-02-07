@@ -1,0 +1,10 @@
+version: '3'
+services:
+  ros2-desktop:
+    image: tiryoh/ros2-desktop-vnc:humble-arm64
+    ports:
+      - "6080:80"
+      - "10000:10000"
+    volumes:
+      - ./ws_colcon:/home/ubuntu/colcon_ws:cached
+    shm_size: '1024m'
