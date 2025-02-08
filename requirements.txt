@@ -1,0 +1,2 @@
+aioconsole==0.8.1
+bleak==0.22.3

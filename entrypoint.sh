@@ -109,13 +109,13 @@ grep -F "source /opt/ros/$ROS_DISTRO/setup.bash" $BASHRC_PATH || echo "source /o
 grep -F "source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash" $BASHRC_PATH || echo "source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash" >> $BASHRC_PATH
 
 # colcon workspaceの設定と初期化
-mkdir -p /home/ubuntu/colcon_ws/src
-cd /home/ubuntu/colcon_ws
+mkdir -p /home/ubuntu/ws_colcon/src
+cd /home/ubuntu/ws_colcon
 if [ ! -d "build" ] || [ ! -d "install" ]; then
     gosu $USER bash -c "source /opt/ros/$ROS_DISTRO/setup.bash && colcon build"
 fi
-chown -R $USER:$USER /home/ubuntu/colcon_ws
-grep -F "source /home/ubuntu/colcon_ws/install/setup.bash" $BASHRC_PATH || echo "if [ -f /home/ubuntu/colcon_ws/install/setup.bash ]; then source /home/ubuntu/colcon_ws/install/setup.bash; fi" >> $BASHRC_PATH
+chown -R $USER:$USER /home/ubuntu/ws_colcon
+grep -F "source /home/ubuntu/ws_colcon/install/setup.bash" $BASHRC_PATH || echo "if [ -f /home/ubuntu/ws_colcon/install/setup.bash ]; then source /home/ubuntu/ws_colcon/install/setup.bash; fi" >> $BASHRC_PATH
 chown $USER:$USER $BASHRC_PATH
 
 #=========================================

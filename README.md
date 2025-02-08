@@ -53,7 +53,7 @@ docker compose up -d
 
 - **VNC対応**: ブラウザベースのVNCクライアントを通じて、グラフィカルな開発環境にアクセス可能
 - **VSCodium搭載**: コードの編集や開発作業が可能
-- **ボリューム共有**: ホストマシンの`ws_colcon`ディレクトリがコンテナの`/home/ubuntu/colcon_ws`にマウント
+- **ボリューム共有**: ホストマシンの`ws_colcon`ディレクトリがコンテナの`/home/ubuntu/ws_colcon`にマウント
 - **ポート転送**:
   - 6080: noVNC (ブラウザベースVNC)
   - 10000: VNCサーバー

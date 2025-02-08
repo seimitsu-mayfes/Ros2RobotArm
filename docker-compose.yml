@@ -14,9 +14,9 @@ services:
     
     # ボリュームマウントの設定
     volumes:
-      # ホストのws_colonディレクトリをコンテナ内のcolcon_wsにマウント
+      # ホストのws_colconディレクトリをコンテナ内のws_colconにマウント
       # cached: パフォーマンス向上のためのキャッシュオプション
-      - ./ws_colcon:/home/ubuntu/colcon_ws:cached
+      - ./ws_colcon:/home/ubuntu/ws_colcon:cached
     
     # 共有メモリサイズの設定(GUIアプリケーションのパフォーマンス向上用)
     shm_size: '1024m'
