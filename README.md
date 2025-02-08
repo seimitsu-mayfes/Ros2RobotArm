@@ -49,6 +49,11 @@ docker compose up -d
 └── ws_colcon/          # ROSワークスペース(ホストとコンテナ間で共有)
 ```
 
+
+## controllerの起動方法
+. venv/bin/activate && python3 BLECentral.py
+cd ws_colcon && . install/setup.bash && ros2 launch my_robot_arm_controller controller.launch.py
+
 ## 開発環境の特徴
 
 - **VNC対応**: ブラウザベースのVNCクライアントを通じて、グラフィカルな開発環境にアクセス可能
