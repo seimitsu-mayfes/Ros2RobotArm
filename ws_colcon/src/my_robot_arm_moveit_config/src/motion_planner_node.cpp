@@ -28,12 +28,24 @@ public:
                 this->shared_from_this(), "arm_group");
 
             // 基本設定
+            // プランニング設定
             move_group_interface_->setPlanningTime(30.0);
-            move_group_interface_->setNumPlanningAttempts(20);
+            move_group_interface_->setNumPlanningAttempts(50);
             move_group_interface_->setMaxVelocityScalingFactor(0.1);
             move_group_interface_->setMaxAccelerationScalingFactor(0.1);
-            move_group_interface_->setGoalPositionTolerance(0.01);
-            move_group_interface_->setGoalOrientationTolerance(0.01);
+            move_group_interface_->setGoalPositionTolerance(0.05);
+            move_group_interface_->setGoalOrientationTolerance(0.05);
+
+            // プランナーの設定
+            move_group_interface_->setPlannerId("RRTConnect");
+            move_group_interface_->setWorkspace(-2.0, -2.0, -2.0, 2.0, 2.0, 2.0);
+
+            // 現在の状態を取得して有効性を確認
+            moveit::core::RobotStatePtr current_state = move_group_interface_->getCurrentState();
+            if (!current_state) {
+                RCLCPP_ERROR(this->get_logger(), "Failed to get current robot state");
+                return;
+            }
 
             // Visual Toolsの設定
             visual_tools_ = std::make_shared<moveit_visual_tools::MoveItVisualTools>(
@@ -49,7 +61,6 @@ public:
             // RVizでの操作を監視
             move_group_interface_->setEndEffectorLink("end_effector");
             move_group_interface_->allowReplanning(true);
-            move_group_interface_->setPlannerId("RRTConnect");
 
             // ホームポジションに移動するサービスを作成
             home_service_ = this->create_service<std_srvs::srv::Trigger>(
@@ -93,8 +104,20 @@ private:
         std::vector<double> home_position = {0.0, 0.0, 0.0, 0.0, 0.0};
         move_group_interface_->setJointValueTarget(home_position);
 
+        // 現在の状態を確認
+        moveit::core::RobotStatePtr current_state = move_group_interface_->getCurrentState();
+        if (!current_state) {
+            response->success = false;
+            response->message = "Failed to get current robot state";
+            return;
+        }
+
         // 動作計画と実行
         moveit::planning_interface::MoveGroupInterface::Plan plan;
+        
+        // Start stateを明示的に設定
+        move_group_interface_->setStartStateToCurrentState();
+        
         bool success = (move_group_interface_->plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
 
         if (success) {
@@ -114,8 +137,20 @@ private:
         // 目標姿勢を設定
         move_group_interface_->setPoseTarget(request->pose);
 
+        // 現在の状態を確認
+        moveit::core::RobotStatePtr current_state = move_group_interface_->getCurrentState();
+        if (!current_state) {
+            response->success = false;
+            response->message = "Failed to get current robot state";
+            return;
+        }
+
         // 動作計画と実行
         moveit::planning_interface::MoveGroupInterface::Plan plan;
+        
+        // Start stateを明示的に設定
+        move_group_interface_->setStartStateToCurrentState();
+        
         bool success = (move_group_interface_->plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
 
         if (success) {

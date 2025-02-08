@@ -35,9 +35,9 @@ public:
             std::bind(&RobotArmController::handle_cancel, this, std::placeholders::_1),
             std::bind(&RobotArmController::handle_accepted, this, std::placeholders::_1));
 
-        // 現在の関節角度を初期化
-        current_joint_positions_ = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-        joint_names_ = {"joint1", "joint2", "joint3", "joint4", "joint5", "joint6"};
+        // 現在の関節角度を初期化 (5軸アーム用)
+        current_joint_positions_ = {0.0, 0.0, 0.0, 0.0, 0.0};
+        joint_names_ = {"joint1", "joint2", "joint3", "joint4", "joint5"};
 
         // TCP/IPサーバーの初期化とスレッド開始
         server_thread_ = std::thread(&RobotArmController::run_server, this);

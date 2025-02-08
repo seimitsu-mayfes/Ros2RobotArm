@@ -82,6 +82,6 @@ def generate_launch_description():
         joint_state_publisher_node,
         robot_state_publisher_node,
         move_group_node,
-        # rviz_node,  # RVizを無効化
+        rviz_node,
         motion_planner_node,
     ])
