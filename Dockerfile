@@ -140,7 +140,12 @@ RUN rosdep update
 # ROS2 Humbleに対応したMoveIt2パッケージをインストール
 #=========================================
 RUN apt-get update -q && \
-    apt-get install -y ros-${ROS_DISTRO}-moveit && \
+    apt-get install -y \
+    ros-${ROS_DISTRO}-moveit \
+    ros-${ROS_DISTRO}-moveit-visual-tools \
+    ros-${ROS_DISTRO}-moveit-ros-move-group \
+    ros-${ROS_DISTRO}-moveit-planners-ompl \
+    ros-${ROS_DISTRO}-moveit-ros-visualization && \
     rm -rf /var/lib/apt/lists/*
 
 #=========================================

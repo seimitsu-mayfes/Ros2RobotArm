@@ -8,15 +8,19 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_action REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(control_msgs REQUIRED)
 
 # Add controller node executable
 add_executable(controller_node src/controller_node.cpp)
 ament_target_dependencies(controller_node
   rclcpp
+  rclcpp_action
   std_msgs
   sensor_msgs
+  control_msgs
 )
 
 # Install targets
