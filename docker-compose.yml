@@ -4,8 +4,8 @@ version: '3'
 services:
   # ROS2デスクトップ環境のサービス定義
   ros2-desktop:
-    # ROS2 Humble + VNCサーバーを含むDockerイメージを使用
-    image: tiryoh/ros2-desktop-vnc:humble-arm64
+    # カスタムDockerfileからビルド
+    build: .
     
     # ポート転送の設定
     ports:
