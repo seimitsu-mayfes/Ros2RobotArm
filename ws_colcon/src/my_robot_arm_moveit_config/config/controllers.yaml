@@ -1,13 +1,32 @@
-controller_names:
-  - arm_controller
+/**:
+  ros__parameters:
+    moveit_simple_controller_manager:
+      controller_names:
+        - arm_controller
+      arm_controller:
+        type: FollowJointTrajectory
+        action_ns: follow_joint_trajectory
+        default: true
+        joints:
+          - joint1
+          - joint2
+          - joint3
+          - joint4
+          - joint5
 
-arm_controller:
-  action_ns: follow_joint_trajectory
-  type: FollowJointTrajectory
-  default: true
-  joints:
-    - joint1
-    - joint2
-    - joint3
-    - joint4
-    - joint5
+    controller_manager:
+      update_rate: 100
+
+    arm_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+      joints:
+        - joint1
+        - joint2
+        - joint3
+        - joint4
+        - joint5
+      command_interfaces:
+        - position
+      state_interfaces:
+        - position
+        - velocity

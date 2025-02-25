@@ -24,7 +24,7 @@ public:
         // 現在の関節状態をパブリッシュするためのタイマーとパブリッシャー
         joint_state_pub_ = this->create_publisher<sensor_msgs::msg::JointState>("joint_states", 10);
         joint_state_timer_ = this->create_wall_timer(
-            50ms,  // 20Hz
+            20ms,  // 50Hz
             std::bind(&RobotArmController::publish_joint_states, this));
 
         // Follow Joint Trajectoryアクションサーバーの作成
@@ -37,6 +37,7 @@ public:
 
         // 現在の関節角度を初期化 (5軸アーム用)
         current_joint_positions_ = {0.0, 0.0, 0.0, 0.0, 0.0};
+        target_joint_positions_ = current_joint_positions_;
         joint_names_ = {"joint1", "joint2", "joint3", "joint4", "joint5"};
 
         // TCP/IPサーバーの初期化とスレッド開始
@@ -62,7 +63,56 @@ private:
         joint_state.header.stamp = this->get_clock()->now();
         joint_state.name = joint_names_;
         joint_state.position = current_joint_positions_;
+        
+        // 補間された位置に更新
+        for (size_t i = 0; i < current_joint_positions_.size(); ++i) {
+            double diff = target_joint_positions_[i] - current_joint_positions_[i];
+            if (std::abs(diff) > 0.001) {  // 閾値以上の差がある場合
+                current_joint_positions_[i] += diff * 0.1;  // 10%ずつ補間
+            }
+        }
+        
         joint_state_pub_->publish(joint_state);
+        
+        // 現在位置を送信
+        send_joint_positions();
+    }
+
+    void send_joint_positions() {
+        if (client_sock_ >= 0) {
+            std::stringstream ss;
+            ss << "{\"angles\":[";
+            for (size_t j = 0; j < current_joint_positions_.size(); ++j) {
+                if (j > 0) ss << ",";
+                ss << current_joint_positions_[j];
+            }
+            ss << "]}\n";
+            std::string message = ss.str();
+            
+            int flag = 1;
+            setsockopt(client_sock_, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
+            
+            ssize_t sent = send(client_sock_, message.c_str(), message.length(), MSG_NOSIGNAL);
+            if (sent < 0) {
+                if (errno == EPIPE || errno == ECONNRESET) {
+                    RCLCPP_WARN(this->get_logger(), "Connection lost during send");
+                    close(client_sock_);
+                    client_sock_ = -1;
+                    reconnect_client();
+                }
+            }
+        }
+    }
+
+    void reconnect_client() {
+        if (client_sock_ >= 0) {
+            close(client_sock_);
+            client_sock_ = -1;
+        }
+        
+        // 再接続を試みる
+        RCLCPP_INFO(this->get_logger(), "Attempting to reconnect...");
+        std::this_thread::sleep_for(1s);
     }
 
     // Follow Joint Trajectoryアクションのゴールハンドラ
@@ -77,6 +127,13 @@ private:
                 return rclcpp_action::GoalResponse::REJECT;
             }
         }
+        
+        // 軌道点の検証
+        if (goal->trajectory.points.empty()) {
+            RCLCPP_ERROR(this->get_logger(), "Trajectory is empty");
+            return rclcpp_action::GoalResponse::REJECT;
+        }
+        
         return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
     }
 
@@ -101,6 +158,8 @@ private:
         auto feedback = std::make_shared<FollowJointTrajectory::Feedback>();
         auto result = std::make_shared<FollowJointTrajectory::Result>();
 
+        rclcpp::Time trajectory_start = this->get_clock()->now();
+
         // 軌道の各ポイントを実行
         for (size_t i = 0; i < goal->trajectory.points.size(); ++i) {
             // キャンセルチェック
@@ -110,148 +169,124 @@ private:
                 return;
             }
 
-            // 目標位置を取得
             const auto& point = goal->trajectory.points[i];
             
-            // 現在の関節角度を更新
+            // 目標位置を更新
             for (size_t j = 0; j < goal->trajectory.joint_names.size(); ++j) {
                 auto it = std::find(joint_names_.begin(), joint_names_.end(), 
                                   goal->trajectory.joint_names[j]);
                 if (it != joint_names_.end()) {
                     size_t index = std::distance(joint_names_.begin(), it);
-                    current_joint_positions_[index] = point.positions[j];
-                }
-            }
-
-            // TCP/IP経由でBLECentral.pyに送信
-            if (client_sock_ >= 0) {
-                std::stringstream ss;
-                ss << "{\"angles\":[";
-                for (size_t j = 0; j < current_joint_positions_.size(); ++j) {
-                    if (j > 0) ss << ",";
-                    ss << current_joint_positions_[j];
-                }
-                ss << "]}\n";
-                std::string message = ss.str();
-                
-                int flag = 1;
-                setsockopt(client_sock_, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
-                
-                ssize_t sent = send(client_sock_, message.c_str(), message.length(), MSG_NOSIGNAL);
-                if (sent < 0) {
-                    if (errno == EPIPE || errno == ECONNRESET) {
-                        RCLCPP_WARN(this->get_logger(), "Connection lost during send");
-                        close(client_sock_);
-                        client_sock_ = -1;
-                        result->error_code = FollowJointTrajectory::Result::PATH_TOLERANCE_VIOLATED;
-                        goal_handle->abort(result);
-                        return;
-                    }
+                    target_joint_positions_[index] = point.positions[j];
                 }
             }
 
             // フィードバックを送信
-            feedback->actual = point;
+            feedback->desired = point;
+            feedback->actual.positions = current_joint_positions_;
+            feedback->actual.time_from_start = this->get_clock()->now() - trajectory_start;
             goal_handle->publish_feedback(feedback);
 
-            // 次のポイントまで待機
+            // 次のポイントまでの時間を計算して待機
             if (i < goal->trajectory.points.size() - 1) {
-                std::this_thread::sleep_for(50ms);  // 20Hz
+                const auto& next_point = goal->trajectory.points[i + 1];
+                double next_time = rclcpp::Duration(next_point.time_from_start).seconds();
+                double current_time = rclcpp::Duration(point.time_from_start).seconds();
+                double time_diff = next_time - current_time;
+                if (time_diff > 0) {
+                    std::this_thread::sleep_for(std::chrono::duration<double>(time_diff));
+                }
             }
         }
 
-        // 成功
+        // 目標位置に到達するまで待機
+        bool reached = false;
+        while (!reached && rclcpp::ok()) {
+            reached = true;
+            for (size_t i = 0; i < current_joint_positions_.size(); ++i) {
+                if (std::abs(current_joint_positions_[i] - target_joint_positions_[i]) > 0.01) {
+                    reached = false;
+                    break;
+                }
+            }
+            if (!reached) {
+                std::this_thread::sleep_for(20ms);
+            }
+        }
+
         result->error_code = FollowJointTrajectory::Result::SUCCESSFUL;
         goal_handle->succeed(result);
     }
 
     void run_server() {
-        server_sock_ = socket(AF_INET, SOCK_STREAM, 0);
-        if (server_sock_ < 0) {
-            RCLCPP_ERROR(this->get_logger(), "Failed to create socket");
-            return;
-        }
-
-        struct sockaddr_in server_addr;
-        server_addr.sin_family = AF_INET;
-        server_addr.sin_addr.s_addr = INADDR_ANY;
-        server_addr.sin_port = htons(5000);  // ポート5000を使用
-
-        // ソケットオプションの設定
-        int opt = 1;
-        setsockopt(server_sock_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-        
-        // 送信バッファサイズを最適化
-        int sendbuff = 32768;
-        setsockopt(server_sock_, SOL_SOCKET, SO_SNDBUF, &sendbuff, sizeof(sendbuff));
-        
-        // Nagleアルゴリズムを無効化して即時送信
-        int flag = 1;
-        setsockopt(server_sock_, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
-        
-        // キープアライブを有効化
-        int keepalive = 1;
-        setsockopt(server_sock_, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive));
-
-        if (bind(server_sock_, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-            RCLCPP_ERROR(this->get_logger(), "Failed to bind socket");
-            close(server_sock_);
-            return;
-        }
-
-        if (listen(server_sock_, 1) < 0) {
-            RCLCPP_ERROR(this->get_logger(), "Failed to listen");
-            close(server_sock_);
-            return;
-        }
-
-        RCLCPP_INFO(this->get_logger(), "TCP server listening on port 5000");
-
         while (rclcpp::ok()) {
-            struct sockaddr_in client_addr;
-            socklen_t client_len = sizeof(client_addr);
-            client_sock_ = accept(server_sock_, (struct sockaddr *)&client_addr, &client_len);
-            
-            if (client_sock_ < 0) {
-                RCLCPP_ERROR(this->get_logger(), "Failed to accept connection");
+            server_sock_ = socket(AF_INET, SOCK_STREAM, 0);
+            if (server_sock_ < 0) {
+                RCLCPP_ERROR(this->get_logger(), "Failed to create socket");
+                std::this_thread::sleep_for(1s);
                 continue;
             }
 
-            RCLCPP_INFO(this->get_logger(), "Client connected");
+            struct sockaddr_in server_addr;
+            server_addr.sin_family = AF_INET;
+            server_addr.sin_addr.s_addr = INADDR_ANY;
+            server_addr.sin_port = htons(5000);
 
-            // クライアントからのメッセージを受信
-            char buffer[1024];
-            ssize_t bytes_received;
+            int opt = 1;
+            setsockopt(server_sock_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+            setsockopt(server_sock_, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt));
             
-            // タイムアウト設定
-            struct timeval tv;
-            tv.tv_sec = 1;  // 1秒
-            tv.tv_usec = 0;
-            setsockopt(client_sock_, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-            
-            while (true) {
-                bytes_received = recv(client_sock_, buffer, sizeof(buffer), 0);
-                if (bytes_received > 0) {
-                    // メッセージを受信した場合は継続
-                    continue;
-                } else if (bytes_received == 0) {
-                    // クライアントが正常に切断した場合
-                    break;
-                } else {
-                    // エラーの場合
-                    if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                        // タイムアウトの場合は継続
-                        continue;
-                    } else {
-                        // その他のエラーの場合は切断
-                        break;
-                    }
-                }
+            if (bind(server_sock_, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+                RCLCPP_ERROR(this->get_logger(), "Failed to bind socket");
+                close(server_sock_);
+                std::this_thread::sleep_for(1s);
+                continue;
             }
 
-            RCLCPP_INFO(this->get_logger(), "Client disconnected");
-            close(client_sock_);
-            client_sock_ = -1;
+            if (listen(server_sock_, 1) < 0) {
+                RCLCPP_ERROR(this->get_logger(), "Failed to listen");
+                close(server_sock_);
+                std::this_thread::sleep_for(1s);
+                continue;
+            }
+
+            RCLCPP_INFO(this->get_logger(), "TCP server listening on port 5000");
+
+            while (rclcpp::ok()) {
+                struct sockaddr_in client_addr;
+                socklen_t client_len = sizeof(client_addr);
+                client_sock_ = accept(server_sock_, (struct sockaddr *)&client_addr, &client_len);
+                
+                if (client_sock_ < 0) {
+                    RCLCPP_ERROR(this->get_logger(), "Failed to accept connection");
+                    std::this_thread::sleep_for(1s);
+                    continue;
+                }
+
+                RCLCPP_INFO(this->get_logger(), "Client connected");
+
+                struct timeval tv;
+                tv.tv_sec = 1;
+                tv.tv_usec = 0;
+                setsockopt(client_sock_, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+                
+                char buffer[1024];
+                while (rclcpp::ok()) {
+                    ssize_t bytes_received = recv(client_sock_, buffer, sizeof(buffer), 0);
+                    if (bytes_received <= 0) {
+                        if (errno != EAGAIN && errno != EWOULDBLOCK) {
+                            break;
+                        }
+                    }
+                }
+
+                RCLCPP_INFO(this->get_logger(), "Client disconnected");
+                close(client_sock_);
+                client_sock_ = -1;
+            }
+
+            close(server_sock_);
+            server_sock_ = -1;
         }
     }
 
@@ -264,6 +299,7 @@ private:
     int client_sock_ = -1;
     std::vector<std::string> joint_names_;
     std::vector<double> current_joint_positions_;
+    std::vector<double> target_joint_positions_;
 };
 
 int main(int argc, char * argv[]) {
